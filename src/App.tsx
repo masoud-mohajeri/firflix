@@ -12,6 +12,33 @@ type ResumePoint = {
 const LIBRARY_STORAGE_KEY = 'firflix-library'
 const PROGRESS_STORAGE_KEY = 'firflix-progress'
 
+function validateLibrary(value: unknown): MediaLibrary {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Library must be a JSON object where each key is a series title.')
+  }
+
+  const parsed = value as MediaLibrary
+
+  for (const [title, seasons] of Object.entries(parsed)) {
+    if (!Array.isArray(seasons)) {
+      throw new Error(`"${title}" must be an array of seasons.`)
+    }
+
+    seasons.forEach((episodes, seasonIdx) => {
+      if (!Array.isArray(episodes)) {
+        throw new Error(`Season ${seasonIdx + 1} in "${title}" must be an array of links.`)
+      }
+      episodes.forEach((link, episodeIdx) => {
+        if (typeof link !== 'string' || link.trim() === '') {
+          throw new Error(`Invalid link at "${title}" S${seasonIdx + 1}E${episodeIdx + 1}.`)
+        }
+      })
+    })
+  }
+
+  return parsed
+}
+
 function App() {
   const [library, setLibrary] = useState<MediaLibrary>({})
   const [libraryInput, setLibraryInput] = useState('')
@@ -27,11 +54,24 @@ function App() {
     const persistedLibrary = localStorage.getItem(LIBRARY_STORAGE_KEY)
     if (persistedLibrary) {
       try {
-        const parsed = JSON.parse(persistedLibrary) as MediaLibrary
+        const parsed = validateLibrary(JSON.parse(persistedLibrary))
         setLibrary(parsed)
       } catch {
         setError('Saved library is invalid JSON. Please paste and save again.')
       }
+    } else {
+      void (async () => {
+        try {
+          const response = await fetch('/library.json')
+          if (!response.ok) return
+          const parsed = validateLibrary((await response.json()) as unknown)
+          setLibrary(parsed)
+          setLibraryInput(JSON.stringify(parsed, null, 2))
+          localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(parsed))
+        } catch {
+          // Ignore bootstrap fetch errors so manual input still works.
+        }
+      })()
     }
 
     const persistedProgress = localStorage.getItem(PROGRESS_STORAGE_KEY)
@@ -143,26 +183,7 @@ function App() {
     setError(null)
     try {
       const normalized = libraryInput.replace(/([{,]\s*)([A-Za-z0-9_-]+)\s*:/g, '$1"$2":')
-      const parsed = JSON.parse(normalized) as MediaLibrary
-
-      for (const [title, seasons] of Object.entries(parsed)) {
-        if (!Array.isArray(seasons)) {
-          throw new Error(`"${title}" must be an array of seasons.`)
-        }
-
-        seasons.forEach((episodes, seasonIdx) => {
-          if (!Array.isArray(episodes)) {
-            throw new Error(`Season ${seasonIdx + 1} in "${title}" must be an array of links.`)
-          }
-          episodes.forEach((link, episodeIdx) => {
-            if (typeof link !== 'string' || link.trim() === '') {
-              throw new Error(
-                `Invalid link at "${title}" S${seasonIdx + 1}E${episodeIdx + 1}.`,
-              )
-            }
-          })
-        })
-      }
+      const parsed = validateLibrary(JSON.parse(normalized))
 
       setLibrary(parsed)
       localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(parsed))
