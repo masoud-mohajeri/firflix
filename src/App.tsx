@@ -41,11 +41,9 @@ function validateLibrary(value: unknown): MediaLibrary {
 
 function App() {
   const [library, setLibrary] = useState<MediaLibrary>({})
-  const [libraryInput, setLibraryInput] = useState('')
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null)
   const [selectedSeasonIndex, setSelectedSeasonIndex] = useState<number | null>(null)
   const [selectedEpisodeIndex, setSelectedEpisodeIndex] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [resumeMap, setResumeMap] = useState<Record<string, ResumePoint>>({})
 
   const playerRef = useRef<HTMLVideoElement | null>(null)
@@ -57,7 +55,7 @@ function App() {
         const parsed = validateLibrary(JSON.parse(persistedLibrary))
         setLibrary(parsed)
       } catch {
-        setError('Saved library is invalid JSON. Please paste and save again.')
+        localStorage.removeItem(LIBRARY_STORAGE_KEY)
       }
     } else {
       void (async () => {
@@ -66,10 +64,9 @@ function App() {
           if (!response.ok) return
           const parsed = validateLibrary((await response.json()) as unknown)
           setLibrary(parsed)
-          setLibraryInput(JSON.stringify(parsed, null, 2))
           localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(parsed))
         } catch {
-          // Ignore bootstrap fetch errors so manual input still works.
+          // Ignore bootstrap fetch errors so app can still render without data.
         }
       })()
     }
@@ -179,37 +176,19 @@ function App() {
     }
   }, [resumeMap, selectedTitle, selectedSeasonIndex, selectedEpisodeIndex])
 
-  const applyLibrary = () => {
-    setError(null)
-    try {
-      const normalized = libraryInput.replace(/([{,]\s*)([A-Za-z0-9_-]+)\s*:/g, '$1"$2":')
-      const parsed = validateLibrary(JSON.parse(normalized))
-
-      setLibrary(parsed)
-      localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(parsed))
-      const firstTitle = Object.keys(parsed)[0] ?? null
-      setSelectedTitle(firstTitle)
-      setSelectedSeasonIndex(0)
-      setSelectedEpisodeIndex(0)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not parse JSON. Please check format.')
-    }
-  }
-
-  const clearLibrary = () => {
-    setLibrary({})
-    setLibraryInput('')
-    setSelectedTitle(null)
-    setSelectedSeasonIndex(null)
-    setSelectedEpisodeIndex(null)
-    localStorage.removeItem(LIBRARY_STORAGE_KEY)
-  }
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
+
+  const recentlyWatched = useMemo(
+    () =>
+      Object.entries(resumeMap)
+        .filter(([title, point]) => library[title]?.[point.seasonIndex]?.[point.episodeIndex])
+        .sort((a, b) => b[1].currentTime - a[1].currentTime),
+    [library, resumeMap],
+  )
 
   return (
     <div className="app-shell">
@@ -222,20 +201,30 @@ function App() {
       </header>
 
       <main className="layout">
-        <aside className="panel library-panel">
-          <h2>Library Input</h2>
-          <p className="hint">Paste your movie/series JSON once. It will be saved in your browser.</p>
-          <textarea
-            value={libraryInput}
-            onChange={(e) => setLibraryInput(e.target.value)}
-            placeholder='{"Series Name": [["https://cdn.../s01e01.mp4"]]}'
-            rows={10}
-          />
-          {error ? <p className="error">{error}</p> : null}
-          <div className="button-row">
-            <button onClick={applyLibrary} className="btn btn-primary">Save Library</button>
-            <button onClick={clearLibrary} className="btn btn-muted">Clear</button>
-          </div>
+        <aside className="panel recent-panel">
+          <h2>Recently Watched</h2>
+          {recentlyWatched.length === 0 ? (
+            <p className="empty">No watch history yet.</p>
+          ) : (
+            <div className="recent-list">
+              {recentlyWatched.map(([title, point]) => (
+                <button
+                  key={title}
+                  className="recent-item"
+                  onClick={() => {
+                    setSelectedTitle(title)
+                    setSelectedSeasonIndex(point.seasonIndex)
+                    setSelectedEpisodeIndex(point.episodeIndex)
+                  }}
+                >
+                  <strong>{title}</strong>
+                  <span>
+                    S{point.seasonIndex + 1}E{point.episodeIndex + 1} at {formatTime(point.currentTime)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </aside>
 
         <section className="panel browser-panel">
