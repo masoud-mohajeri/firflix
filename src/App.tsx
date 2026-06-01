@@ -213,6 +213,21 @@ function App() {
       </header>
 
       <main className='layout'>
+        <section className='panel player-panel'>
+          <h2>Player</h2>
+          {selectedEpisodeLink ? (
+            <video
+              key={`${selectedTitle}-${selectedSeasonIndex}-${selectedEpisodeIndex}`}
+              ref={playerRef}
+              controls
+              preload='metadata'
+              src={selectedEpisodeLink}
+            />
+          ) : (
+            <p className='empty'>Select an episode to start playback.</p>
+          )}
+        </section>
+
         <aside className='panel recent-panel'>
           <h2>Recently Watched</h2>
           {recentlyWatched.length === 0 ? (
@@ -247,19 +262,16 @@ function App() {
             <p className='empty'>No library loaded yet.</p>
           ) : (
             <>
-              <div className='selector-row'>
-                <label htmlFor='series-select'>Series</label>
-                <select
-                  id='series-select'
-                  value={selectedTitle ?? ''}
-                  onChange={(e) => setSelectedTitle(e.target.value)}
-                >
+              <div className='series-chip-list' aria-label='Series'>
                   {titles.map((title) => (
-                    <option key={title} value={title}>
+                    <button
+                      key={title}
+                      className={`series-chip ${selectedTitle === title ? 'active' : ''}`}
+                      onClick={() => setSelectedTitle(title)}
+                    >
                       {title}
-                    </option>
+                    </button>
                   ))}
-                </select>
               </div>
 
               <div className='season-grid'>
@@ -298,21 +310,6 @@ function App() {
                 </p>
               ) : null}
             </>
-          )}
-        </section>
-
-        <section className='panel player-panel'>
-          <h2>Player</h2>
-          {selectedEpisodeLink ? (
-            <video
-              key={`${selectedTitle}-${selectedSeasonIndex}-${selectedEpisodeIndex}`}
-              ref={playerRef}
-              controls
-              preload='metadata'
-              src={selectedEpisodeLink}
-            />
-          ) : (
-            <p className='empty'>Select an episode to start playback.</p>
           )}
         </section>
       </main>

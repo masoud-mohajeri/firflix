@@ -59,7 +59,7 @@ h1 {
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  grid-template-columns: 1fr;
   gap: 16px;
 }
 
@@ -71,15 +71,6 @@ h1 {
   backdrop-filter: blur(8px);
 }
 
-.recent-panel {
-  grid-column: 1 / 2;
-}
-
-.browser-panel,
-.player-panel {
-  grid-column: 2 / 3;
-}
-
 .hint,
 .empty,
 .resume {
@@ -87,26 +78,28 @@ h1 {
   margin: 8px 0 12px;
 }
 
-select {
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.6);
-  color: #e2e8f0;
-  border-radius: 12px;
-  padding: 12px;
-  font: inherit;
-}
-
-select:focus {
-  outline: 2px solid rgba(45, 212, 191, 0.6);
-  border-color: transparent;
-}
-
-.selector-row {
+.series-chip-list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.series-chip {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.series-chip.active {
+  background: linear-gradient(90deg, #22d3ee, #0ea5e9);
+  color: #0a1020;
+  border-color: transparent;
 }
 
 .season-grid {
@@ -198,11 +191,5 @@ video {
 
   .layout {
     grid-template-columns: 1fr;
-  }
-
-  .recent-panel,
-  .browser-panel,
-  .player-panel {
-    grid-column: auto;
   }
 }
