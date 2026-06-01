@@ -56,6 +56,7 @@ function App() {
   const [resumeMap, setResumeMap] = useState<Record<string, ResumePoint>>({});
 
   const playerRef = useRef<HTMLVideoElement | null>(null);
+  const shouldAutoplayNextRef = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -102,6 +103,33 @@ function App() {
 
   const resumeForSeries = selectedTitle ? resumeMap[selectedTitle] : undefined;
 
+  const playNextEpisode = () => {
+    if (
+      !selectedSeries ||
+      selectedSeasonIndex === null ||
+      selectedEpisodeIndex === null
+    ) {
+      return;
+    }
+
+    const currentSeason = selectedSeries[selectedSeasonIndex];
+    const nextEpisodeIndex = selectedEpisodeIndex + 1;
+
+    if (currentSeason?.[nextEpisodeIndex]) {
+      shouldAutoplayNextRef.current = true;
+      setSelectedEpisodeIndex(nextEpisodeIndex);
+      return;
+    }
+
+    const nextSeasonIndex = selectedSeasonIndex + 1;
+
+    if (selectedSeries[nextSeasonIndex]?.[0]) {
+      shouldAutoplayNextRef.current = true;
+      setSelectedSeasonIndex(nextSeasonIndex);
+      setSelectedEpisodeIndex(0);
+    }
+  };
+
   useEffect(() => {
     if (!selectedSeries) {
       setSelectedSeasonIndex(null);
@@ -122,7 +150,7 @@ function App() {
 
     setSelectedSeasonIndex(0);
     setSelectedEpisodeIndex(0);
-  }, [selectedSeries, resumeForSeries]);
+  }, [selectedSeries, selectedTitle]);
 
   useEffect(() => {
     if (!playerRef.current || !selectedTitle || !selectedEpisodeLink) return;
@@ -154,6 +182,25 @@ function App() {
   ]);
 
   useEffect(() => {
+    if (!playerRef.current || !selectedEpisodeLink || !shouldAutoplayNextRef.current) {
+      return;
+    }
+
+    const video = playerRef.current;
+
+    const playWhenReady = () => {
+      shouldAutoplayNextRef.current = false;
+      void video.play();
+    };
+
+    video.addEventListener('loadedmetadata', playWhenReady, { once: true });
+
+    return () => {
+      video.removeEventListener('loadedmetadata', playWhenReady);
+    };
+  }, [selectedEpisodeLink]);
+
+  useEffect(() => {
     if (!playerRef.current || !selectedTitle) return;
 
     const video = playerRef.current;
@@ -176,14 +223,25 @@ function App() {
 
     video.addEventListener('timeupdate', saveProgress);
     video.addEventListener('pause', saveProgress);
-    video.addEventListener('ended', saveProgress);
+    const handleEnded = () => {
+      saveProgress();
+      playNextEpisode();
+    };
+
+    video.addEventListener('ended', handleEnded);
 
     return () => {
       video.removeEventListener('timeupdate', saveProgress);
       video.removeEventListener('pause', saveProgress);
-      video.removeEventListener('ended', saveProgress);
+      video.removeEventListener('ended', handleEnded);
     };
-  }, [resumeMap, selectedTitle, selectedSeasonIndex, selectedEpisodeIndex]);
+  }, [
+    resumeMap,
+    selectedTitle,
+    selectedSeasonIndex,
+    selectedEpisodeIndex,
+    selectedSeries,
+  ]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
