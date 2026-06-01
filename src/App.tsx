@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
-type MediaLibrary = Record<string, string[][]>;
+type Episode =
+  | string
+  | {
+      src: string;
+      subtitles?: string;
+      subtitleLabel?: string;
+      subtitleLanguage?: string;
+    };
+
+type MediaLibrary = Record<string, Episode[][]>;
 
 type ResumePoint = {
   seasonIndex: number;
@@ -31,8 +40,31 @@ function validateLibrary(value: unknown): MediaLibrary {
           `Season ${seasonIdx + 1} in "${title}" must be an array of links.`,
         );
       }
-      episodes.forEach((link, episodeIdx) => {
-        if (typeof link !== 'string' || link.trim() === '') {
+      episodes.forEach((episode, episodeIdx) => {
+        if (typeof episode === 'string' && episode.trim() !== '') {
+          return;
+        }
+
+        if (
+          episode &&
+          typeof episode === 'object' &&
+          !Array.isArray(episode) &&
+          typeof episode.src === 'string' &&
+          episode.src.trim() !== ''
+        ) {
+          if (
+            episode.subtitles !== undefined &&
+            (typeof episode.subtitles !== 'string' ||
+              episode.subtitles.trim() === '')
+          ) {
+            throw new Error(
+              `Invalid subtitle link at "${title}" S${seasonIdx + 1}E${episodeIdx + 1}.`,
+            );
+          }
+          return;
+        }
+
+        {
           throw new Error(
             `Invalid link at "${title}" S${seasonIdx + 1}E${episodeIdx + 1}.`,
           );
@@ -54,6 +86,8 @@ function App() {
     number | null
   >(null);
   const [resumeMap, setResumeMap] = useState<Record<string, ResumePoint>>({});
+  const [subtitlesVisible, setSubtitlesVisible] = useState(true);
+  const [hasSubtitles, setHasSubtitles] = useState(false);
 
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const shouldAutoplayNextRef = useRef(false);
@@ -98,8 +132,21 @@ function App() {
     selectedSeasonIndex !== null &&
     selectedEpisodeIndex !== null &&
     selectedSeries[selectedSeasonIndex]?.[selectedEpisodeIndex]
-      ? selectedSeries[selectedSeasonIndex][selectedEpisodeIndex]
+      ? typeof selectedSeries[selectedSeasonIndex][selectedEpisodeIndex] ===
+        'string'
+        ? selectedSeries[selectedSeasonIndex][selectedEpisodeIndex]
+        : selectedSeries[selectedSeasonIndex][selectedEpisodeIndex].src
       : null;
+  const selectedEpisode =
+    selectedSeries &&
+    selectedSeasonIndex !== null &&
+    selectedEpisodeIndex !== null
+      ? selectedSeries[selectedSeasonIndex]?.[selectedEpisodeIndex]
+      : null;
+  const selectedSubtitle =
+    selectedEpisode && typeof selectedEpisode !== 'string'
+      ? selectedEpisode.subtitles
+      : undefined;
 
   const resumeForSeries = selectedTitle ? resumeMap[selectedTitle] : undefined;
 
@@ -243,6 +290,30 @@ function App() {
     selectedSeries,
   ]);
 
+  useEffect(() => {
+    const video = playerRef.current;
+    if (!video) return;
+
+    const updateTextTracks = () => {
+      const tracks = Array.from(video.textTracks);
+      setHasSubtitles(Boolean(selectedSubtitle) || tracks.length > 0);
+
+      tracks.forEach((track, index) => {
+        track.mode = subtitlesVisible && index === 0 ? 'showing' : 'disabled';
+      });
+    };
+
+    updateTextTracks();
+
+    video.textTracks.addEventListener('addtrack', updateTextTracks);
+    video.addEventListener('loadedmetadata', updateTextTracks);
+
+    return () => {
+      video.textTracks.removeEventListener('addtrack', updateTextTracks);
+      video.removeEventListener('loadedmetadata', updateTextTracks);
+    };
+  }, [selectedEpisodeLink, selectedSubtitle, subtitlesVisible]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -274,13 +345,47 @@ function App() {
         <section className='panel player-panel'>
           <h2>Player</h2>
           {selectedEpisodeLink ? (
-            <video
-              key={`${selectedTitle}-${selectedSeasonIndex}-${selectedEpisodeIndex}`}
-              ref={playerRef}
-              controls
-              preload='metadata'
-              src={selectedEpisodeLink}
-            />
+            <>
+              <video
+                key={`${selectedTitle}-${selectedSeasonIndex}-${selectedEpisodeIndex}`}
+                ref={playerRef}
+                controls
+                preload='metadata'
+                src={selectedEpisodeLink}
+              >
+                {selectedSubtitle ? (
+                  <track
+                    key={selectedSubtitle}
+                    kind='subtitles'
+                    src={selectedSubtitle}
+                    srcLang={
+                      typeof selectedEpisode === 'string'
+                        ? 'en'
+                        : selectedEpisode?.subtitleLanguage ?? 'en'
+                    }
+                    label={
+                      typeof selectedEpisode === 'string'
+                        ? 'Subtitles'
+                        : selectedEpisode?.subtitleLabel ?? 'Subtitles'
+                    }
+                    default={subtitlesVisible}
+                  />
+                ) : null}
+              </video>
+              <button
+                className='subtitle-toggle'
+                onClick={() => setSubtitlesVisible((visible) => !visible)}
+                disabled={!hasSubtitles}
+              >
+                {subtitlesVisible ? 'Hide subtitles' : 'Show subtitles'}
+              </button>
+              {!hasSubtitles ? (
+                <p className='subtitle-note'>
+                  Embedded MKV softsubs are not exposed by most browsers. Add a
+                  WebVTT subtitle file in library.json to show subtitles.
+                </p>
+              ) : null}
+            </>
           ) : (
             <p className='empty'>Select an episode to start playback.</p>
           )}
