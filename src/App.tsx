@@ -60,7 +60,7 @@ function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch('/library.json');
+        const response = await fetch(`${import.meta.env.BASE_URL}library.json`);
         if (!response.ok) return;
         const parsed = validateLibrary((await response.json()) as unknown);
         setLibrary(parsed);
